@@ -29,7 +29,7 @@ class acf_field_external_relationship extends acf_field
 		
 		// extra
 		add_action('wp_ajax_acf/fields/external_relationship/query_items', array($this, 'query_items'));
-		add_action('wp_ajax_nopriv_acf/fields/relationship/query_items', array($this, 'query_items'));
+		add_action('wp_ajax_nopriv_acf/fields/external_relationship/query_items', array($this, 'query_items'));
 
 		if (is_admin()) {
 			wp_enqueue_script(
