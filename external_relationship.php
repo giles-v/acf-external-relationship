@@ -74,12 +74,13 @@ class acf_field_external_relationship extends acf_field
 		// vars
 		$options = array(
 			's' => '',
+			'paged' => 0,
 			'nonce' => ''
 		);
 
 		$options = array_merge($options, $_POST);
 
-		$fields[] = apply_filters('acf/load_field', null, $_POST['field_key']);
+		$fields[] = apply_filters('acf/load_field', array(), $_POST['field_key']);
 		if (empty($fields)) {
 			die(0);
 		}
@@ -102,10 +103,15 @@ class acf_field_external_relationship extends acf_field
 		}
 
 		// search
-		$sql_query = $field['all_items_query'];
+		$page_size = 10;
+		$offset = (int)$options['paged'] - 1;
+		if ($offset < 0) $offset = 0;
+		$offset *= $page_size;
+		$sql_query = $field['all_items_query'] . " LIMIT $offset, $page_size";
+		$is_search = !!$options['s'];
 		if( $options['s'] )
 		{
-			$sql_query = str_ireplace('{QUERY}', $options['s'], $field['search_items_query']);
+			$sql_query = str_ireplace('{QUERY}', $options['s'], $field['search_items_query']) . " LIMIT $offset, $page_size";
 		}
 		
 		unset( $options['s'] );
@@ -113,7 +119,7 @@ class acf_field_external_relationship extends acf_field
 		$results = $this->get_sql_column($db, $sql_query);
 		$html = '';
 
-		if (empty($results)) {
+		if (!$is_search && empty($results)) {
 			$html = '
 			<li class="no-results">
 				<span>No items found ('.$sql_query.')</span>
@@ -185,7 +191,7 @@ class acf_field_external_relationship extends acf_field
 		}
 		
 		?>
-<div class="acf_external_relationship" data-max="<?php echo $field['max']; ?>" data-s="">
+<div class="acf_external_relationship" data-max="<?php echo $field['max']; ?>" data-s="" data-paged="1">
 	
 	<!-- Hidden Blank default value -->
 	<input type="hidden" name="<?php echo $field['name']; ?>" value="" />
