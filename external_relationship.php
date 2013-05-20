@@ -68,15 +68,6 @@ class acf_field_external_relationship extends acf_field
 		}
 		return $result;
 	}
-
-	function get_field_data_by_key($key) {
-		global $wpdb;
-		$value = $wpdb->get_var($wpdb->prepare("SELECT meta_value FROM $wpdb->postmeta WHERE meta_key = %s LIMIT 1" , $key) );
-		if ($value) {
-			return unserialize($value);
-		}
-		return null;
-	}
 	
 	function query_items()
 	{
@@ -88,8 +79,12 @@ class acf_field_external_relationship extends acf_field
 
 		$options = array_merge($options, $_POST);
 
-		$field = $this->get_field_data_by_key($_POST['field_key']);
-
+		$fields[] = apply_filters('acf/load_field', null, $_POST['field_key']);
+		if (empty($fields)) {
+			die(0);
+		}
+		$field = array_pop($fields);
+		
 		global $wpdb;
 		$db = $wpdb;
 		if (!empty($field['use_external_db']['status'])) {
