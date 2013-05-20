@@ -273,16 +273,12 @@
         
 		
 		// get results
-		console.log(div.parent());
 	    $.ajax({
 			url: ajaxurl,
 			type: 'post',
 			dataType: 'html',
 			data: $.extend( attributes, { 
 				action : 'acf/fields/external_relationship/query_items',
-				all_items_query : div.parent().attr('data-all_items_query'),
-				search_items_query : div.parent().attr('data-search_items_query'),
-				single_item_query : div.parent().attr('data-single_item_query'),
 				field_name : div.parent().attr('data-field_name'),
 				field_key : div.parent().attr('data-field_key'),
 				nonce : acf.nonce

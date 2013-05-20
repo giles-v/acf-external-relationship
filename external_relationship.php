@@ -22,34 +22,45 @@ class acf_field_external_relationship extends acf_field
 		$this->name = 'external_relationship';
 		$this->label = __("External Relationship",'acf');
 		$this->category = __("Relational",'acf');
+		$this->dir = apply_filters('acf/helpers/get_dir', __FILE__);
 		
 		// do not delete!
 		parent::__construct();
 		
-		
 		// extra
 		add_action('wp_ajax_acf/fields/external_relationship/query_items', array($this, 'query_items'));
 		add_action('wp_ajax_nopriv_acf/fields/external_relationship/query_items', array($this, 'query_items'));
-
-		if (is_admin()) {
-			wp_enqueue_script(
-				'external_relationship', 
-				plugins_url('external_relationship.js', __FILE__), 
-				array(), 
-				'1.0.0',
-				true
-			);
-			wp_enqueue_style(
-				'external_relationship', 
-				plugins_url('external_relationship.css', __FILE__) 
-			);
-		}
+		add_action('admin_enqueue_scripts', array($this, 'admin_enqueue_scripts'));
+		add_action('acf/input/admin_enqueue_scripts', array($this, 'input_admin_enqueue_scripts'));
 	}
 
-	function get_sql_column($query) {
+	function admin_enqueue_scripts() {
+		wp_enqueue_script(
+			'external_relationship_admin', 
+			$this->dir . 'external_relationship_admin.js',
+			array(), 
+			'1.0.0',
+			true
+		);
+	}
+
+	function input_admin_enqueue_scripts() {
+		wp_enqueue_script(
+			'external_relationship', 
+			$this->dir . 'external_relationship.js',
+			array(), 
+			'1.0.0',
+			true
+		);
+		wp_enqueue_style(
+			'external_relationship', 
+			$this->dir . 'external_relationship.css' 
+		);
+	}
+
+	function get_sql_column(&$db, $query) {
 		$result = array();
-		global $wpdb;
-		$rows = $wpdb->get_results($query, ARRAY_N);
+		$rows = $db->get_results($query, ARRAY_N);
 		if (is_array($rows)) {
 			foreach($rows as $row) {
 				$result[$row[0]] = $row[1];
@@ -57,36 +68,54 @@ class acf_field_external_relationship extends acf_field
 		}
 		return $result;
 	}
+
+	function get_field_data_by_key($key) {
+		global $wpdb;
+		$value = $wpdb->get_var($wpdb->prepare("SELECT meta_value FROM $wpdb->postmeta WHERE meta_key = %s LIMIT 1" , $key) );
+		if ($value) {
+			return unserialize($value);
+		}
+		return null;
+	}
 	
 	function query_items()
 	{
 		// vars
 		$options = array(
-			'all_items_query' => '',
-			'search_items_query' => '',
-			'single_item_query' => '',
-			'sql_query' => '',
 			's' => '',
 			'nonce' => ''
 		);
 
 		$options = array_merge($options, $_POST);
-		
+
+		$field = $this->get_field_data_by_key($_POST['field_key']);
+
+		global $wpdb;
+		$db = $wpdb;
+		if (!empty($field['use_external_db']['status'])) {
+			$db = new wpdb(
+				$field['use_external_db']['db_credentials']['username'],
+				$field['use_external_db']['db_credentials']['password'],
+				$field['use_external_db']['db_credentials']['db_name'],
+				$field['use_external_db']['db_credentials']['host']
+			);
+		}
+
 		// validate
 		if( !wp_verify_nonce($options['nonce'], 'acf_nonce') ) {
 			die(0);
 		}
 
 		// search
-		$sql_query = $options['all_items_query'];
+		$sql_query = $field['all_items_query'];
 		if( $options['s'] )
 		{
-			$sql_query = str_ireplace('{QUERY}', $options['s'], $options['search_items_query']);
+			$sql_query = str_ireplace('{QUERY}', $options['s'], $field['search_items_query']);
 		}
 		
 		unset( $options['s'] );
 
-		$results = $this->get_sql_column($sql_query);
+		$results = $this->get_sql_column($db, $sql_query);
 		$html = '';
 
 		if (empty($results)) {
@@ -117,18 +146,21 @@ class acf_field_external_relationship extends acf_field
 	*  create_field()
 	*
 	*  Create the HTML interface for your field
-	*
-	*  @param	$field - an array holding all the field's data
-	*
-	*  @type	action
-	*  @since	3.6
-	*  @date	23/01/13
 	*/
 	function create_field($field)
 	{
 		global $wpdb;
 		// vars
 		$defaults = array(
+			'use_external_db'    => array(
+				'status' => 0,
+				'db_credentials' => array(
+					'host'       => '',
+					'db_name'    => '',
+					'user'       => '',
+					'password'   => '',
+				),
+			),
 			'all_items_query'    =>	'',
 			'search_items_query' =>	'',
 			'single_item_query'  => '',
@@ -136,6 +168,17 @@ class acf_field_external_relationship extends acf_field
 		);
 		
 		$field = array_merge($defaults, $field);
+
+		global $wpdb;
+		$db = $wpdb;
+		if (!empty($field['use_external_db']['status'])) {
+			$db = new wpdb(
+				$field['use_external_db']['db_credentials']['username'],
+				$field['use_external_db']['db_credentials']['password'],
+				$field['use_external_db']['db_credentials']['db_name'],
+				$field['use_external_db']['db_credentials']['host']
+			);
+		}
 		
 		// validate types
 		$field['max'] = (int) $field['max'];
@@ -147,7 +190,7 @@ class acf_field_external_relationship extends acf_field
 		}
 		
 		?>
-<div class="acf_external_relationship" data-max="<?php echo $field['max']; ?>" data-s="" data-all_items_query="<?php echo $field['all_items_query']; ?>" data-search_items_query="<?php echo $field['search_items_query']; ?>">
+<div class="acf_external_relationship" data-max="<?php echo $field['max']; ?>" data-s="">
 	
 	<!-- Hidden Blank default value -->
 	<input type="hidden" name="<?php echo $field['name']; ?>" value="" />
@@ -192,7 +235,7 @@ class acf_field_external_relationship extends acf_field
 			foreach( $field['value'] as $id )
 			{
 				$title_query = str_ireplace('{ITEM-ID}', $id, $field['single_item_query']);
-				$title = $wpdb->get_var($title_query);
+				$title = $db->get_var($title_query);
 				
 				echo '
 				<li>
@@ -215,22 +258,20 @@ class acf_field_external_relationship extends acf_field
 
 	
 	}
-	
-	
-	/*--------------------------------------------------------------------------------------
-	*
-	*	create_options
-	*
-	*	@author Elliot Condon
-	*	@since 2.0.6
-	*	@updated 2.2.0
-	* 
-	*-------------------------------------------------------------------------------------*/
-	
+
 	function create_options($field)
 	{
 		// vars
 		$defaults = array(
+			'use_external_db'    => array(
+				'status' => 0,
+				'db_credentials' => array(
+					'host'       => '',
+					'db_name'    => '',
+					'user'       => '',
+					'password'   => '',
+				),
+			),
 			'all_items_query'    =>	'SELECT id, title FROM products ORDER BY title',
 			'search_items_query' =>	'SELECT id, title FROM products WHERE title LIKE \'%{QUERY}%\' ORDER BY title',
 			'single_item_query'  => 'SELECT title FROM products WHERE id = \'{ITEM-ID}\'',
@@ -241,6 +282,73 @@ class acf_field_external_relationship extends acf_field
 		$key = $field['name'];
 		
 		?>
+		<tr class="external-db" data-field_name="<?php echo $field['key']; ?>">
+			<td class="label">
+				<label><?php _e("Use External Database?",'acf'); ?></label>
+			</td>
+			<td>
+				<?php 
+				do_action('acf/create_field', array(
+					'type'	=>	'radio',
+					'name'	=>	'fields['.$field['key'].'][use_external_db][status]',
+					'value'	=>	$field['use_external_db']['status'],
+					'choices'	=>	array(
+						1	=>	__("Yes",'acf'),
+						0	=>	__("No",'acf'),
+					),
+					'layout'	=>	'horizontal',
+				));
+				?>
+				<div class="er-dbcreds-wrapper" <?php if( ! $field['use_external_db']['status'] ) echo 'style="display:none"'; ?>>
+					<table class="er-dbcreds widefat">
+						<tbody>
+							<tr>
+								<td width="25%">
+									<label><?php _e("DB Host",'acf'); ?></label>
+									<?php 
+									do_action('acf/create_field', array(
+										'type'	=>	'text',
+										'name'	=>	'fields['.$field['key'].'][use_external_db][db_credentials][host]',
+										'value'	=>	$field['use_external_db']['db_credentials']['host'],
+									));
+									?>
+								</td>
+								<td width="25%">
+									<label><?php _e("DB Name",'acf'); ?></label>
+									<?php 
+									do_action('acf/create_field', array(
+										'type'	=>	'text',
+										'name'	=>	'fields['.$field['key'].'][use_external_db][db_credentials][db_name]',
+										'value'	=>	$field['use_external_db']['db_credentials']['db_name'],
+									));
+									?>
+								</td>
+								<td width="25%">
+									<label><?php _e("Username",'acf'); ?></label>
+									<?php 
+									do_action('acf/create_field', array(
+										'type'	=>	'text',
+										'name'	=>	'fields['.$field['key'].'][use_external_db][db_credentials][username]',
+										'value'	=>	$field['use_external_db']['db_credentials']['username'],
+									));
+									?>
+								</td>
+								<td width="25%">
+									<label><?php _e("Password",'acf'); ?></label>
+									<?php 
+									do_action('acf/create_field', array(
+										'type'	=>	'text',
+										'name'	=>	'fields['.$field['key'].'][use_external_db][db_credentials][password]',
+										'value'	=>	$field['use_external_db']['db_credentials']['password'],
+									));
+									?>
+								</td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
+			</td>
+		</tr>
 		<tr class="field_option field_option_<?php echo $this->name; ?>">
 			<td class="label">
 				<label><?php _e("Get All Items SQL Query",'acf'); ?></label>
@@ -303,28 +411,6 @@ class acf_field_external_relationship extends acf_field
 		</tr>
 		<?php
 	}
-	
-	
-	/*--------------------------------------------------------------------------------------
-	*
-	*	get_value
-	*
-	*	@author Elliot Condon
-	*	@since 3.3.3
-	* 
-	*-------------------------------------------------------------------------------------*/
-	
-	function get_value($post_id, $field)
-	{
-		// get value
-		$value = parent::get_value($post_id, $field);
-		
-		// format value
-		
-		// return value
-		return $value;	
-	}
-	
 }
 
 new acf_field_external_relationship();
